@@ -653,6 +653,8 @@ class LeAudioAseConfigurationTest : public Test {
   void TestAsesInactivated(const LeAudioDevice* device) {
     for (const auto& ase : device->ases_) {
       ASSERT_FALSE(ase.active);
+      ASSERT_TRUE(ase.cis_id == ::le_audio::kInvalidCisId);
+      ASSERT_TRUE(ase.cis_conn_hdl == 0);
     }
   }
 
@@ -950,10 +952,20 @@ TEST_F(LeAudioAseConfigurationTest, test_reconnection_media) {
 
   TestSingleAseConfiguration(LeAudioContextType::MEDIA, data, 2, configuration);
 
-  SetCisInformationToActiveAse();
+  /* Generate CISes, symulate CIG creation and assign cis handles to ASEs.*/
+  group_->CigGenerateCisIds(LeAudioContextType::MEDIA);
+  std::vector<uint16_t> handles = {0x0012, 0x0013};
+  group_->CigAssignCisConnHandles(handles);
+  group_->CigAssignCisIds(left);
+  group_->CigAssignCisIds(right);
 
+  TestActiveAses();
   /* Left got disconnected */
   left->DeactivateAllAses();
+
+  /* Unassign from the group*/
+  group_->CigUnassignCis(left);
+
   TestAsesInactivated(left);
 
   /* Prepare reconfiguration */
@@ -980,6 +992,12 @@ TEST_F(LeAudioAseConfigurationTest, test_reconnection_media) {
   for (int i = 0; i < 2; i++) {
     TestGroupAseConfigurationVerdict(data[i]);
   }
+
+  /* Before device is rejoining, and group already exist, cis handles are
+   * assigned before sending codec config
+   */
+  group_->CigAssignCisIds(left);
+  group_->CigAssignCisConnHandlesToAses(left);
 
   TestActiveAses();
 }
